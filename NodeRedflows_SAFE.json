@@ -1,0 +1,297 @@
+[
+  {
+    "id": "0bd21dfd13e278ba",
+    "type": "tab",
+    "label": "Flow 4",
+    "disabled": false,
+    "info": "",
+    "env": []
+  },
+  {
+    "id": "9ad435d542c4de6a",
+    "type": "mongodb4",
+    "z": "0bd21dfd13e278ba",
+    "clientNode": "2d442dea1f6f6311",
+    "mode": "collection",
+    "collection": "environment_telemetry",
+    "operation": "insertOne",
+    "output": "toArray",
+    "maxTimeMS": "0",
+    "handleDocId": false,
+    "name": "",
+    "x": 800,
+    "y": 380,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "81a07fa559ca020b",
+    "type": "function",
+    "z": "0bd21dfd13e278ba",
+    "name": "function 3",
+    "func": "// 1. Capture the raw MQTT telemetry\nvar raw_data = msg.payload;\n\n// 2. Construct the Time-Series compliant object\nvar ts_document = {\n    \"timestamp\": new Date(),    // MUST match your Atlas timestamp field\n    \"sensor_id\": raw_data.sensor_id, // MUST match your Atlas metadata field\n    \"temperature\": raw_data.temperature, // The telemetry\n    \"humidity\": raw_data.humidity\n};\n\n// 3. Pass the formatted document forward\nmsg.payload = ts_document;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 360,
+    "y": 380,
+    "wires": [
+      [
+        "d082315e25ba07ce"
+      ]
+    ]
+  },
+  {
+    "id": "10dca147082383b3",
+    "type": "mqtt in",
+    "z": "0bd21dfd13e278ba",
+    "name": "",
+    "topic": "campus/zone1/environment",
+    "qos": "0",
+    "datatype": "json",
+    "broker": "b2f57fa605692be6",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 800,
+    "y": 800,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "d6d1d7bb58280742",
+    "type": "mqtt in",
+    "z": "0bd21dfd13e278ba",
+    "name": "",
+    "topic": "campus/zone1/telemetry",
+    "qos": "2",
+    "datatype": "json",
+    "broker": "b2f57fa605692be6",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 130,
+    "y": 440,
+    "wires": [
+      [
+        "81a07fa559ca020b"
+      ]
+    ]
+  },
+  {
+    "id": "839f9916b9ddc105",
+    "type": "http in",
+    "z": "0bd21dfd13e278ba",
+    "name": "",
+    "url": "/api",
+    "method": "post",
+    "upload": false,
+    "skipBodyParsing": false,
+    "swaggerDoc": "",
+    "x": 100,
+    "y": 240,
+    "wires": [
+      [
+        "d9e126ad5160a025"
+      ]
+    ]
+  },
+  {
+    "id": "a452718dacd94f73",
+    "type": "http response",
+    "z": "0bd21dfd13e278ba",
+    "name": "ihsan ",
+    "statusCode": "200",
+    "headers": {},
+    "x": 510,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "d9e126ad5160a025",
+    "type": "mongodb4",
+    "z": "0bd21dfd13e278ba",
+    "clientNode": "2d442dea1f6f6311",
+    "mode": "collection",
+    "collection": "device_metadata",
+    "operation": "insertOne",
+    "output": "toArray",
+    "maxTimeMS": "0",
+    "handleDocId": false,
+    "name": "",
+    "x": 280,
+    "y": 240,
+    "wires": [
+      [
+        "a452718dacd94f73"
+      ]
+    ]
+  },
+  {
+    "id": "b59d0ca889d63743",
+    "type": "mongodb4",
+    "z": "0bd21dfd13e278ba",
+    "clientNode": "2d442dea1f6f6311",
+    "mode": "collection",
+    "collection": "device_registry",
+    "operation": "findOne",
+    "output": "toArray",
+    "maxTimeMS": "0",
+    "handleDocId": false,
+    "name": "",
+    "x": 580,
+    "y": 380,
+    "wires": [
+      [
+        "1622b3bedf5450a0",
+        "b705db4d59ae155d"
+      ]
+    ]
+  },
+  {
+    "id": "d082315e25ba07ce",
+    "type": "function",
+    "z": "0bd21dfd13e278ba",
+    "name": "build query",
+    "func": "\n// 1. Save the formatted telemetry document for later use\nmsg.original_data = msg.payload;\n\n// 2. Build the query to check if this sensor is registered\nmsg.payload = [{ \"sensor_id\": msg.payload.sensor_id }];\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 370,
+    "y": 500,
+    "wires": [
+      [
+        "b59d0ca889d63743"
+      ]
+    ]
+  },
+  {
+    "id": "1622b3bedf5450a0",
+    "type": "function",
+    "z": "0bd21dfd13e278ba",
+    "name": "check authorized",
+    "func": "var result = msg.payload;\n\n// Handle both possible shapes: a direct object, or an array containing one\nvar device = null;\nif (Array.isArray(result) && result.length > 0) {\n    device = result[0];\n} else if (result && typeof result === 'object' && result.sensor_id) {\n    device = result;\n}\n\nif (device && device.authorized === true) {\n    msg.payload = msg.original_data;\n    return [msg, null];\n} else {\n    msg.payload = {\n        rejected_data: msg.original_data,\n        reason: device ? \"device not authorized\" : \"device not registered\"\n    };\n    return [null, msg];\n}",
+    "outputs": 2,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 630,
+    "y": 500,
+    "wires": [
+      [
+        "9ad435d542c4de6a"
+      ],
+      [
+        "20a9b4fe78ddf978"
+      ]
+    ]
+  },
+  {
+    "id": "20a9b4fe78ddf978",
+    "type": "debug",
+    "z": "0bd21dfd13e278ba",
+    "name": "debug 2",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "false",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 840,
+    "y": 520,
+    "wires": []
+  },
+  {
+    "id": "b705db4d59ae155d",
+    "type": "debug",
+    "z": "0bd21dfd13e278ba",
+    "name": "debug 15",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "false",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 820,
+    "y": 300,
+    "wires": []
+  },
+  {
+    "id": "2d442dea1f6f6311",
+    "type": "mongodb4-client",
+    "name": "",
+    "protocol": "mongodb+srv",
+    "hostname": "",
+    "port": "",
+    "dbName": "smart_campus",
+    "appName": "",
+    "authSource": "",
+    "authMechanism": "DEFAULT",
+    "tls": false,
+    "tlsCAFile": "",
+    "tlsCertificateKeyFile": "",
+    "tlsInsecure": false,
+    "connectTimeoutMS": "30000",
+    "socketTimeoutMS": "0",
+    "minPoolSize": "0",
+    "maxPoolSize": "100",
+    "maxIdleTimeMS": "0",
+    "uri": "mongodb+srv://USERNAME:PASSWORD@YOUR_CLUSTER.mongodb.net/",
+    "advanced": "{}",
+    "uriTabActive": "tab-uri-advanced"
+  },
+  {
+    "id": "b2f57fa605692be6",
+    "type": "mqtt-broker",
+    "name": "",
+    "broker": "s7a2171c.ala.asia-southeast1.emqxsl.com",
+    "port": "8883",
+    "tls": "",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": true,
+    "protocolVersion": 4,
+    "keepalive": 60,
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthRetain": "false",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closeRetain": "false",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willRetain": "false",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "993faee567cf53c8",
+    "type": "global-config",
+    "env": [],
+    "modules": {
+      "node-red-contrib-mongodb4": "3.4.0"
+    }
+  }
+]
